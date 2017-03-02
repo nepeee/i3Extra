@@ -126,6 +126,8 @@
 #include "planner.h"
 #include "temperature.h"
 #include "ultralcd.h"
+#include "ultralcd.h"
+#include "bi3_plus_lcd.h"
 #include "configuration_store.h"
 
 #if ENABLED(MESH_BED_LEVELING)

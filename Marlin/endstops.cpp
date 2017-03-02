@@ -30,6 +30,7 @@
 #include "temperature.h"
 #include "stepper.h"
 #include "ultralcd.h"
+#include "bi3_plus_lcd.h"
 
 // TEST_ENDSTOP: test the old and the current status of an endstop
 #define TEST_ENDSTOP(ENDSTOP) (TEST(current_endstop_bits & old_endstop_bits, ENDSTOP))

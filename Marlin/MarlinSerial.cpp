@@ -33,7 +33,7 @@
 #include "stepper.h"
 #include "Marlin.h"
 
-#ifndef USBCON
+#if !(defined(USBCON) || defined(ARDUINO_SERIAL))
 // this next line disables the entire HardwareSerial.cpp,
 // this is so I can support Attiny series and any other chip without a UART
 #if defined(UBRRH) || defined(UBRR0H) || defined(UBRR1H) || defined(UBRR2H) || defined(UBRR3H)
@@ -430,7 +430,7 @@ void MarlinSerial::printFloat(double number, uint8_t digits) {
 MarlinSerial customizedSerial;
 
 #endif // whole file
-#endif // !USBCON
+#endif // !USBCON || ARDUINO_SERIAL
 
 // For AT90USB targets use the UART for BT interfacing
 #if defined(USBCON) && ENABLED(BLUETOOTH)

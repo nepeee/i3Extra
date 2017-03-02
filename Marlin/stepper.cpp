@@ -50,6 +50,7 @@
 #include "planner.h"
 #include "temperature.h"
 #include "ultralcd.h"
+#include "bi3_plus_lcd.h"
 #include "language.h"
 #include "cardreader.h"
 #include "speed_lookuptable.h"

@@ -40,7 +40,7 @@
 #include "fastio.h"
 #include "utility.h"
 
-#ifdef USBCON
+#if defined(USBCON) || defined(ARDUINO_SERIAL)
   #include "HardwareSerial.h"
   #if ENABLED(BLUETOOTH)
     #define MYSERIAL bluetoothSerial

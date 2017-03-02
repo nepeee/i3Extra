@@ -59,6 +59,7 @@
  */
 
 #include "planner.h"
+#include "bi3_plus_lcd.h"
 #include "stepper.h"
 #include "temperature.h"
 #include "ultralcd.h"

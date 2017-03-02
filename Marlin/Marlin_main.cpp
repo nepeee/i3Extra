@@ -220,6 +220,7 @@
 #include "Marlin.h"
 
 #include "ultralcd.h"
+#include "bi3_plus_lcd.h"
 #include "planner.h"
 #include "stepper.h"
 #include "endstops.h"
@@ -232,6 +233,8 @@
 #include "nozzle.h"
 #include "duration_t.h"
 #include "types.h"
+
+#include "bi3_plus_lcd.h"
 
 #if HAS_ABL
   #include "vector_3.h"
@@ -10095,6 +10098,8 @@ void idle(
 ) {
   lcd_update();
 
+  lcdTask();
+
   host_keepalive();
 
   #if ENABLED(AUTO_REPORT_TEMPERATURES) && (HAS_TEMP_HOTEND || HAS_TEMP_BED)
@@ -10332,6 +10337,8 @@ void setup() {
   #if ENABLED(ENDSTOP_INTERRUPTS_FEATURE)
     setup_endstop_interrupts();
   #endif
+
+  lcdSetup();
 }
 
 /**

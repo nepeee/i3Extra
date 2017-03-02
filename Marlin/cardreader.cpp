@@ -23,6 +23,7 @@
 #include "cardreader.h"
 
 #include "ultralcd.h"
+#include "bi3_plus_lcd.h"
 #include "stepper.h"
 #include "language.h"
 

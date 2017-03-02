@@ -26,6 +26,7 @@
 
 #include "Marlin.h"
 #include "ultralcd.h"
+#include "bi3_plus_lcd.h"
 #include "temperature.h"
 #include "thermistortables.h"
 #include "language.h"
