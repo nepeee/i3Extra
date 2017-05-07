@@ -16,14 +16,14 @@
 #define OPMODE_LOAD_FILAMENT 2
 #define OPMODE_UNLOAD_FILAMENT 3
 
-uint8_t lcdBuff[21];
+uint8_t lcdBuff[26];
 uint16_t fileIndex = 0;
 millis_t nextOpTime, nextLcdUpdate = 0;
 uint8_t opMode = OPMODE_NONE;
 
 //init OK
 void lcdSetup() {
-  Serial2.begin(115200);
+  Serial2.begin(250000);
 
   lcdSendMarlinVersion();
   lcdShowPage(0x01);
@@ -143,37 +143,39 @@ void readLcdSerial() {
           if (card.sdprinting)
             lcdShowPage(33); //show print menu
           else {
-            if (lcdData == 0)
+            if (lcdData == 0) {
               card.initsd();
+              if (card.cardOK)
+                fileIndex = card.getnrfilenames() - 1;
+            }
 
             if (card.cardOK) {
               uint16_t fileCnt = card.getnrfilenames();
-              if (fileIndex < 1)
-                fileIndex = fileCnt;
               card.getWorkDirName();//??
 
-              if (fileCnt > 4) {
+              if (fileCnt > 6) {
                 if (lcdData == 1) { //UP
-                  if (fileIndex > 4)
-                    fileIndex -= 4;
+                  if ((fileIndex + 6) < fileCnt)
+                    fileIndex += 6;
                 }
                 else if (lcdData == 2) { //DOWN
-                  if (fileIndex <= (fileCnt - 4))
-                    fileIndex += 4;
+                  if (fileIndex >= 6)
+                    fileIndex -= 6;
                 }
               }
 
               lcdBuff[0] = 0x5A;
               lcdBuff[1] = 0xA5;
-              lcdBuff[2] = 0x11;
+              lcdBuff[2] = 0x9F;
               lcdBuff[3] = 0x82;
               lcdBuff[4] = 0x01;
               lcdBuff[5] = 0x00;
               Serial2.write(lcdBuff, 6);
 
-              for (uint8_t i = 0; i < 4; i++) {
-                card.getfilename(fileIndex + i);
-                Serial2.write(card.longFilename, 26);
+              for (uint8_t i = 0; i < 6; i++) {
+                card.getfilename(fileIndex - i);
+                strncpy(lcdBuff, card.longFilename, 26);
+                Serial2.write(lcdBuff, 26);
               }
 
               if (lcdData == 0)
@@ -184,19 +186,20 @@ void readLcdSerial() {
         }
       case 0x33: {//FILE SELECT OK
           if (card.cardOK) {
-            card.getfilename(fileIndex + lcdData);
-            card.openFile(card.filename, true);
-
+            card.getfilename(fileIndex - lcdData);
+            
             lcdBuff[0] = 0x5A;
             lcdBuff[1] = 0xA5;
-            lcdBuff[2] = 0x11;
+            lcdBuff[2] = 0x1D;
             lcdBuff[3] = 0x82;
-
             lcdBuff[4] = 0x01;
-            lcdBuff[5] = 0x34;
+            lcdBuff[5] = 0x4E;
             Serial2.write(lcdBuff, 6);
-            Serial2.write(card.longFilename, 26);
+            
+            strncpy(lcdBuff, card.longFilename, 26);
+            Serial2.write(lcdBuff, 26);
 
+            card.openFile(card.filename, true);
             card.startFileprint();
 
             lcdShowPage(33);//print menu
@@ -440,18 +443,36 @@ void readLcdSerial() {
       case 0x01: {//move OK!!!
           enqueue_and_echo_commands_P(PSTR("G91")); // relative mode
 
-          if (lcdData == 0)
-            enqueue_and_echo_commands_P(PSTR("G1 X10 F3000"));
-          else if (lcdData == 1)
-            enqueue_and_echo_commands_P(PSTR("G1 X-10 F3000"));
-          else if (lcdData == 2)
-            enqueue_and_echo_commands_P(PSTR("G1 Y10 F3000"));
-          else if (lcdData == 3)
-            enqueue_and_echo_commands_P(PSTR("G1 Y-10 F3000"));
-          else if (lcdData == 4)
-            enqueue_and_echo_commands_P(PSTR("G1 Z10 F3000"));
-          else if (lcdData == 5)
-            enqueue_and_echo_commands_P(PSTR("G1 Z-10 F3000"));
+          //if (manual_move_axis != (int8_t)NO_AXIS && ELAPSED(millis(), manual_move_start_time) && !planner.is_full()) {
+          //  planner.buffer_line_kinematic(current_position, MMM_TO_MMS(manual_feedrate_mm_m[manual_move_axis]), 0);
+
+          if (lcdData < 2) {
+            if (!axis_homed[X_AXIS])
+              enqueue_and_echo_commands_P(PSTR("G28 X0"));
+            
+            if (lcdData == 0)
+              enqueue_and_echo_commands_P(PSTR("G1 X10 F3000"));
+            else if (lcdData == 1)
+              enqueue_and_echo_commands_P(PSTR("G1 X-10 F3000"));
+          }
+          else if (lcdData < 4) {
+            if (!axis_homed[Y_AXIS])
+              enqueue_and_echo_commands_P(PSTR("G28 Y0"));
+
+            if (lcdData == 2)
+              enqueue_and_echo_commands_P(PSTR("G1 Y10 F3000"));
+            else if (lcdData == 3)
+              enqueue_and_echo_commands_P(PSTR("G1 Y-10 F3000"));
+          }
+          else if (lcdData < 6) {
+            if (!axis_homed[Z_AXIS])
+              enqueue_and_echo_commands_P(PSTR("G28 Z0"));
+
+            if (lcdData == 4)
+              enqueue_and_echo_commands_P(PSTR("G1 Z10 F3000"));
+            else if (lcdData == 5)
+              enqueue_and_echo_commands_P(PSTR("G1 Z-10 F3000"));
+          }
           else if (thermalManager.degHotend(0) >= 180) {
             if (lcdData == 6)
               enqueue_and_echo_commands_P(PSTR("G1 E10 F60"));
@@ -464,6 +485,7 @@ void readLcdSerial() {
         }
       case 0x54: {//disable motors OK!!!
           enqueue_and_echo_commands_P(PSTR("M84"));
+          axis_homed[X_AXIS] = axis_homed[Y_AXIS] = axis_homed[Z_AXIS] = false;
           break;
         }
       case 0x43: {//home x OK!!!

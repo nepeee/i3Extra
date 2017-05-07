@@ -1,7 +1,7 @@
-R1=07      ;波特率,07=115200
+R1=0C      ;Band Rate,0C=250000
 R2=0C      ;Sys_CFG
 R3=5A      ;
 RA=A5      ;
-STOP_DWIN_OS;
 RC=00      ;
+STOP_DWIN_OS;
 
