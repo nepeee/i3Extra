@@ -1,4 +1,4 @@
-#i3Extra
+# i3Extra
 
 This is a modified version of the Marlin 1.1.0-RC8 firmware for the WANHAO Duplicator i3 Plus 3d printer.
 Currently it's in alpha state, same lcd functions are working and some of them is not.
