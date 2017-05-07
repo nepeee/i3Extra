@@ -319,14 +319,13 @@ void readLcdSerial() {
             PID_PARAM(Ki, 0) = scalePID_i((float)((uint16_t)lcdBuff[17] * 255 + lcdBuff[18]) / 10);
             PID_PARAM(Kd, 0) = scalePID_d((float)((uint16_t)lcdBuff[19] * 255 + lcdBuff[20]) / 10);
 
-            Config_StoreSettings();
+            settings.save();
             lcdShowPage(43);//show system menu
           }
           break;
         }
       case 0x42: {//factory reset OK
-          Config_ResetDefault();
-          Config_StoreSettings();
+          settings.reset();
           break;
         }
       case 0x47: {//print config open OK
