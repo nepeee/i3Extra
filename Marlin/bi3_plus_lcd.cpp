@@ -15,11 +15,13 @@
 #define OPMODE_LEVEL_INIT 1
 #define OPMODE_LOAD_FILAMENT 2
 #define OPMODE_UNLOAD_FILAMENT 3
+#define OPMODE_MOVE 4
 
 uint8_t lcdBuff[26];
 uint16_t fileIndex = 0;
 millis_t nextOpTime, nextLcdUpdate = 0;
 uint8_t opMode = OPMODE_NONE;
+uint8_t eventCnt = 0;
 
 //init OK
 void lcdSetup() {
@@ -57,6 +59,17 @@ void executeLoopedOperation(millis_t ms) {
       if (thermalManager.current_temperature[0] >= 190)
         enqueue_and_echo_commands_P(PSTR("G1 E0.5 F60"));
       nextOpTime = ms + 500;
+    }
+    else if (opMode == OPMODE_MOVE) {
+      if (eventCnt == 0) {
+        quickstop_stepper();
+        clear_command_queue();
+        opMode = OPMODE_NONE;
+      }
+      else {
+        eventCnt = 0;
+        nextOpTime = ms + 250;
+      }
     }
   }
 }
@@ -187,7 +200,7 @@ void readLcdSerial() {
       case 0x33: {//FILE SELECT OK
           if (card.cardOK) {
             card.getfilename(fileIndex - lcdData);
-            
+
             lcdBuff[0] = 0x5A;
             lcdBuff[1] = 0xA5;
             lcdBuff[2] = 0x1D;
@@ -195,12 +208,13 @@ void readLcdSerial() {
             lcdBuff[4] = 0x01;
             lcdBuff[5] = 0x4E;
             Serial2.write(lcdBuff, 6);
-            
+
             strncpy(lcdBuff, card.longFilename, 26);
             Serial2.write(lcdBuff, 26);
 
             card.openFile(card.filename, true);
             card.startFileprint();
+            print_job_timer.start();
 
             lcdShowPage(33);//print menu
           }
@@ -210,22 +224,30 @@ void readLcdSerial() {
           card.stopSDPrint();
           clear_command_queue();
           quickstop_stepper();
+          print_job_timer.stop();
           thermalManager.disable_all_heaters();
-          fanSpeeds[0] = 0;
+          #if FAN_COUNT > 0
+            for (uint8_t i = 0; i < FAN_COUNT; i++) fanSpeeds[i] = 0;
+          #endif
 
           lcdShowPage(29); //main menu
           break;
         }
       case 0x36: {//print pause OK
           card.pauseSDPrint();
-          enqueue_and_echo_commands_P(PSTR("G91"));
-          enqueue_and_echo_commands_P(PSTR("G1 Z10 F3000"));
-          enqueue_and_echo_commands_P(PSTR("G90"));
+          print_job_timer.pause();
+          #if ENABLED(PARK_HEAD_ON_PAUSE)
+            enqueue_and_echo_commands_P(PSTR("M125"));
+          #endif
           break;
         }
       case 0x37: {//print start OK
-          //homeing ?
-          card.startFileprint();
+          #if ENABLED(PARK_HEAD_ON_PAUSE)
+            enqueue_and_echo_commands_P(PSTR("M24"));
+          #else
+            card.startFileprint();
+            print_job_timer.start();
+          #endif
           break;
         }
       case 0x3C: {//preheat pla OK
@@ -439,47 +461,96 @@ void readLcdSerial() {
           }
           break;
         }
-      case 0x01: {//move OK!!!
-          enqueue_and_echo_commands_P(PSTR("G91")); // relative mode
-
-          //if (manual_move_axis != (int8_t)NO_AXIS && ELAPSED(millis(), manual_move_start_time) && !planner.is_full()) {
-          //  planner.buffer_line_kinematic(current_position, MMM_TO_MMS(manual_feedrate_mm_m[manual_move_axis]), 0);
-
-          if (lcdData < 2) {
+      case 0x00: {
+          if (opMode == OPMODE_MOVE)
+            eventCnt++;
+          else { 
             if (!axis_homed[X_AXIS])
               enqueue_and_echo_commands_P(PSTR("G28 X0"));
-            
-            if (lcdData == 0)
-              enqueue_and_echo_commands_P(PSTR("G1 X10 F3000"));
-            else if (lcdData == 1)
-              enqueue_and_echo_commands_P(PSTR("G1 X-10 F3000"));
+            else {
+              enqueue_and_echo_commands_P(PSTR("G90"));
+              enqueue_and_echo_commands_P(PSTR("G1 X200 F3000"));
+              nextOpTime = millis() + 250;
+              opMode = OPMODE_MOVE;
+            }
           }
-          else if (lcdData < 4) {
-            if (!axis_homed[Y_AXIS])
-              enqueue_and_echo_commands_P(PSTR("G28 Y0"));
-
-            if (lcdData == 2)
-              enqueue_and_echo_commands_P(PSTR("G1 Y10 F3000"));
-            else if (lcdData == 3)
-              enqueue_and_echo_commands_P(PSTR("G1 Y-10 F3000"));
+          break;
+        }
+      case 0x01: {
+          if (opMode == OPMODE_MOVE)
+            eventCnt++;
+          else {                        
+            if (!axis_homed[X_AXIS])
+              enqueue_and_echo_commands_P(PSTR("G28 X0"));
+            else {
+              enqueue_and_echo_commands_P(PSTR("G90"));
+              enqueue_and_echo_commands_P(PSTR("G1 X0 F3000"));
+              nextOpTime = millis() + 250;
+              opMode = OPMODE_MOVE;
+            }
           }
-          else if (lcdData < 6) {
-            if (!axis_homed[Z_AXIS])
-              enqueue_and_echo_commands_P(PSTR("G28 Z0"));
-
-            if (lcdData == 4)
-              enqueue_and_echo_commands_P(PSTR("G1 Z10 F3000"));
-            else if (lcdData == 5)
-              enqueue_and_echo_commands_P(PSTR("G1 Z-10 F3000"));
+          break;
+        }
+      case 0x02: {
+          if (!axis_homed[Y_AXIS])
+            enqueue_and_echo_commands_P(PSTR("G28 Y0"));
+          else {
+            clear_command_queue();
+            enqueue_and_echo_commands_P(PSTR("G91"));
+            enqueue_and_echo_commands_P(PSTR("G1 Y5 F3000"));
+            enqueue_and_echo_commands_P(PSTR("G90"));
           }
-          else if (thermalManager.degHotend(0) >= 180) {
-            if (lcdData == 6)
-              enqueue_and_echo_commands_P(PSTR("G1 E10 F60"));
-            else if (lcdData == 7)
-              enqueue_and_echo_commands_P(PSTR("G1 E-10 F60"));
+          break;
+        }
+      case 0x03: {
+          if (!axis_homed[Y_AXIS])
+            enqueue_and_echo_commands_P(PSTR("G28 Y0"));
+          else {
+            clear_command_queue();
+            enqueue_and_echo_commands_P(PSTR("G91"));
+            enqueue_and_echo_commands_P(PSTR("G1 Y-5 F3000"));
+            enqueue_and_echo_commands_P(PSTR("G90"));
           }
-
-          enqueue_and_echo_commands_P(PSTR("G90")); // absolute mode
+          break;
+        }
+      case 0x04: {
+          if (!axis_homed[Z_AXIS])
+            enqueue_and_echo_commands_P(PSTR("G28 Z0"));
+          else {
+            clear_command_queue();
+            enqueue_and_echo_commands_P(PSTR("G91"));
+            enqueue_and_echo_commands_P(PSTR("G1 Z0.5 F3000"));
+            enqueue_and_echo_commands_P(PSTR("G90"));
+          }
+          break;
+        }
+      case 0x05: {
+          if (!axis_homed[Z_AXIS])
+            enqueue_and_echo_commands_P(PSTR("G28 Z0"));
+          else {
+            clear_command_queue();
+            enqueue_and_echo_commands_P(PSTR("G91"));
+            enqueue_and_echo_commands_P(PSTR("G1 Z-0.5 F3000"));
+            enqueue_and_echo_commands_P(PSTR("G90"));
+          }
+          break;
+        }
+      case 0x06: {
+          if (thermalManager.degHotend(0) >= 180) {
+            clear_command_queue();
+            enqueue_and_echo_commands_P(PSTR("G91"));
+            enqueue_and_echo_commands_P(PSTR("G1 E5 F60"));
+            enqueue_and_echo_commands_P(PSTR("G90"));
+          }
+          break;
+        }
+      case 0x07: {
+          if (thermalManager.degHotend(0) >= 180) {
+            clear_command_queue();
+            enqueue_and_echo_commands_P(PSTR("G91"));
+            enqueue_and_echo_commands_P(PSTR("G1 E-5 F60"));
+            enqueue_and_echo_commands_P(PSTR("G90"));
+          }
           break;
         }
       case 0x54: {//disable motors OK!!!
@@ -504,7 +575,7 @@ void readLcdSerial() {
           break;
         }
       case 0xFF: {
-          lcdShowPage(58); //update screen
+          //lcdShowPage(58); //update screen
           while (1) {
             watchdog_reset();
             if (Serial.available())
